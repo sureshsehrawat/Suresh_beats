@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-black text-white antialiased;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  transition: width 0.2s ease;
+}
+
+::-webkit-scrollbar:hover {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-zinc-900;
+  border-radius: 8px;
+  margin: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-700;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-600;
+  border-width: 1px;
+}
+
+::-webkit-scrollbar-thumb:active {
+  @apply bg-zinc-500;
+  border-width: 1px;
+}
+
+/* Add smooth scrolling to main content */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}

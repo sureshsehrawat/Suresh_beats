@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Music Player PWA" />
+    
+    <!-- iOS meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Music App" />
+    
+    <!-- iOS icons -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/apple-touch-icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/apple-touch-icon-180x180.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/apple-touch-icon-167x167.png" />
+    
+    <!-- iOS splash screens -->
+    <!-- iPhone 14 Pro Max -->
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_Pro_Max_portrait.png" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_Pro_Max_landscape.png" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" />
+
+    <!-- iPhone 14 Pro -->
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_Pro_portrait.png" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_Pro_landscape.png" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" />
+
+    <!-- iPhone 14 Plus/13 Pro Max/12 Pro Max -->
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_Plus_portrait.png" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_Plus_landscape.png" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" />
+
+    <!-- iPhone 14/13 Pro/13/12 Pro/12 -->
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_portrait.png" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_14_landscape.png" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" />
+
+    <!-- iPhone 13 mini/12 mini -->
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_13_mini_portrait.png" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="%PUBLIC_URL%/splash/iPhone_13_mini_landscape.png" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" />
+    
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <title>Music App</title>
+
+    <style>
+      /* Prevent overscroll bounce effect */
+      html {
+        position: fixed;
+        height: 100%;
+        overflow: hidden;
+        width: 100%;
+        max-width: 100%;
+      }
+      
+      body {
+        height: 100%;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: none;
+        max-width: 100%;
+        position: fixed;
+        width: 100%;
+      }
+
+      /* Handle safe areas */
+      @supports (padding: max(0px)) {
+        body {
+          padding-top: max(0px, env(safe-area-inset-top));
+          padding-bottom: max(0px, env(safe-area-inset-bottom));
+          padding-left: max(0px, env(safe-area-inset-left));
+          padding-right: max(0px, env(safe-area-inset-right));
+        }
+      }
+
+      /* PWA specific styles */
+      @media all and (display-mode: standalone) {
+        body {
+          user-select: none;
+          -webkit-user-select: none;
+          -webkit-touch-callout: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script>
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful');
+            })
+            .catch(err => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+      }
+
+      // Prevent default touch behavior
+      document.addEventListener('touchmove', (e) => {
+        if (!e.target.closest('.smooth-scroll')) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // Prevent double-tap zoom
+      document.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+      });
+
+      // Add to Home Screen prompt
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+      });
+    </script>
+  </body>
+</html> 

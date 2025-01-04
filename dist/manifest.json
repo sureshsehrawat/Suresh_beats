@@ -1,0 +1,50 @@
+{
+  "short_name": "Music App",
+  "name": "Music Player PWA",
+  "description": "A beautiful music player app",
+  "icons": [
+    {
+      "src": "icons/apple-touch-icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/apple-touch-icon-167x167.png",
+      "sizes": "167x167",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/apple-touch-icon-180x180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "https://beats-r7d4o7rom-eklavyas-projects-783461ba.vercel.app/",
+  "start_url": "https://beats-r7d4o7rom-eklavyas-projects-783461ba.vercel.app/",
+  "scope": "https://beats-r7d4o7rom-eklavyas-projects-783461ba.vercel.app/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "prefer_related_applications": false,
+  "categories": ["music", "entertainment"],
+  "display_override": ["standalone", "fullscreen"],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
+} 
