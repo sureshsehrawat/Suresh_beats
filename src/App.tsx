@@ -1,27 +1,47 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MobileNav } from './components/MobileNav';
-import { AlbumGrid } from './components/AlbumGrid';
-import { PlaylistGrid } from './components/PlaylistGrid';
-import { ArtistList } from './components/ArtistList';
-import { SongList } from './components/SongList';
-import { SongGrid } from './components/SongGrid';
-import { AlbumView } from './components/AlbumView';
-import { PlaylistView } from './components/PlaylistView';
-import { MusicPlayer } from './components/MusicPlayer';
-import { NowPlaying } from './components/NowPlaying';
-import { LibraryNav } from './components/LibraryNav';
-import { Settings } from './components/Settings';
-import { SearchView } from './components/SearchView';
-import { PWAPrompt } from './components/PWAPrompt';
-import { getAlbums, getAlbum, getStreamUrl, getPlaylists, getPlaylist, getArtists, getArtist, getAllSongs, getRecentAlbums, getMusicFolders, getMusicDirectories } from './lib/subsonic';
-import type { Album, Song, Playlist, Artist, MusicFolder, Directory } from './lib/subsonic';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Login } from './components/Login';
-import { Camera } from 'lucide-react';
+import { getAlbums, getAlbum, getStreamUrl, getPlaylists, getPlaylist, getArtists, getArtist, getAllSongs, getRecentAlbums, getMusicFolders, getMusicDirectories, addToPlaylist, createPlaylist } from './lib/subsonic';
+import type { Album, Song, Playlist, Artist, MusicFolder, Directory } from './lib/subsonic';
+import { useAudioPlayer } from './hooks/useAudioPlayer';
+import { Camera, MoreVertical, Plus } from 'lucide-react';
+import { PlaylistsView } from './components/PlaylistsView';
 
-// Create a client
-const queryClient = new QueryClient();
+// Lazy load components
+const MobileNav = lazy(() => import('./components/MobileNav').then(module => ({ default: module.MobileNav })));
+const AlbumGrid = lazy(() => import('./components/AlbumGrid').then(module => ({ default: module.AlbumGrid })));
+const AlbumsView = lazy(() => import('./components/AlbumsView').then(module => ({ default: module.AlbumsView })));
+const PlaylistGrid = lazy(() => import('./components/PlaylistGrid').then(module => ({ default: module.PlaylistGrid })));
+const ArtistList = lazy(() => import('./components/ArtistList').then(module => ({ default: module.ArtistList })));
+const SongList = lazy(() => import('./components/SongList').then(module => ({ default: module.SongList })));
+const SongGrid = lazy(() => import('./components/SongGrid').then(module => ({ default: module.SongGrid })));
+const AlbumView = lazy(() => import('./components/AlbumView').then(module => ({ default: module.AlbumView })));
+const PlaylistView = lazy(() => import('./components/PlaylistView').then(module => ({ default: module.PlaylistView })));
+const MusicPlayer = lazy(() => import('./components/MusicPlayer').then(module => ({ default: module.MusicPlayer })));
+const MyMusic = lazy(() => import('./components/MyMusic').then(module => ({ default: module.MyMusic })));
+const LibraryNav = lazy(() => import('./components/LibraryNav').then(module => ({ default: module.LibraryNav })));
+const Settings = lazy(() => import('./components/Settings').then(module => ({ default: module.Settings })));
+const SearchView = lazy(() => import('./components/SearchView').then(module => ({ default: module.SearchView })));
+const PWAPrompt = lazy(() => import('./components/PWAPrompt').then(module => ({ default: module.PWAPrompt })));
+const Login = lazy(() => import('./components/Login').then(module => ({ default: module.Login })));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-full">
+    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
+  </div>
+);
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      cacheTime: 1000 * 60 * 30, // 30 minutes
+      retry: 1,
+      suspense: true,
+    },
+  },
+});
 
 function AppContent() {
   const { user } = useAuth();
@@ -41,8 +61,8 @@ function AppContent() {
   const [selectedPlaylist, setSelectedPlaylist] = useState<{ playlist: Playlist; songs: Song[] } | null>(null);
   const [selectedArtist, setSelectedArtist] = useState<{ artist: Artist; albums: Album[] } | null>(null);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const [currentView, setCurrentView] = useState('home');
-  const [previousView, setPreviousView] = useState('home');
+  const [currentView, setCurrentView] = useState('nowPlaying');
+  const [previousView, setPreviousView] = useState('nowPlaying');
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isShuffleOn, setIsShuffleOn] = useState(false);
@@ -56,6 +76,22 @@ function AppContent() {
   const [directories, setDirectories] = useState<Directory[]>([]);
   const [currentDirectory, setCurrentDirectory] = useState<string | null>(null);
   const [directoryStack, setDirectoryStack] = useState<{id: string, name: string}[]>([]);
+  const [isPlaylistSelectionMode, setIsPlaylistSelectionMode] = useState(false);
+  const [songsToAdd, setSongsToAdd] = useState<Song[]>([]);
+  const [showPlaylistsDropdown, setShowPlaylistsDropdown] = useState(false);
+  const playlistsDropdownRef = useRef<HTMLDivElement>(null);
+  const [showNewPlaylistInput, setShowNewPlaylistInput] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+
+  // Get the streaming URL for the current song
+  const streamUrl = currentSong ? getStreamUrl(currentSong.id) : null;
+  const {
+    isPlaying: audioIsPlaying,
+    currentTime,
+    duration,
+    togglePlay,
+    seek,
+  } = useAudioPlayer(streamUrl);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -206,9 +242,9 @@ function AppContent() {
     const currentIndex = queue.findIndex(song => song.id === currentSong.id);
     
     if (currentIndex < queue.length - 1) {
-      setCurrentSong(queue[currentIndex + 1]);
+      handlePlaySong(queue[currentIndex + 1]);
     } else if (repeatMode === 'all') {
-      setCurrentSong(queue[0]);
+      handlePlaySong(queue[0]);
       if (isShuffleOn) {
         // Reshuffle the queue when we loop back
         const newShuffled = shuffleQueue(queue);
@@ -224,9 +260,9 @@ function AppContent() {
     const currentIndex = queue.findIndex(song => song.id === currentSong.id);
     
     if (currentIndex > 0) {
-      setCurrentSong(queue[currentIndex - 1]);
+      handlePlaySong(queue[currentIndex - 1]);
     } else if (repeatMode === 'all') {
-      setCurrentSong(queue[queue.length - 1]);
+      handlePlaySong(queue[queue.length - 1]);
     }
   };
 
@@ -279,13 +315,17 @@ function AppContent() {
     if (audioRef.current) {
       const time = (value / 100) * audioRef.current.duration;
       audioRef.current.currentTime = time;
+      setProgress(value);
     }
   };
 
   const handleTimeUpdate = () => {
     if (audioRef.current) {
-      const progress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+      const currentTime = audioRef.current.currentTime;
+      const duration = audioRef.current.duration;
+      const progress = (currentTime / duration) * 100;
       setProgress(progress);
+      seek(progress); // Update the seek position in the useAudioPlayer hook
     }
   };
 
@@ -321,6 +361,43 @@ function AppContent() {
     }
 
     return upcomingSongs;
+  };
+
+  const handlePlaylistSelectionForAlbum = (songs: Song[]) => {
+    setSongsToAdd(songs);
+    setIsPlaylistSelectionMode(true);
+    setSelectedAlbum(null);
+    setCurrentView('playlists');
+  };
+
+  const handlePlaylistSelect = async (playlist: Playlist) => {
+    try {
+      setLoading(true);
+      await addToPlaylist(playlist.id, songsToAdd.map(song => song.id));
+      setIsPlaylistSelectionMode(false);
+      setSongsToAdd([]);
+      setCurrentView('playlists');
+      // Refresh playlists
+      const playlistsData = await getPlaylists();
+      setPlaylists(playlistsData);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to add to playlist');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNavigate = (view: string) => {
+    setCurrentView(view);
+    if (view === 'nowPlaying') {
+      setSelectedAlbum(null);
+      setSelectedPlaylist(null);
+      setSelectedArtist(null);
+    }
+    // Restore scroll position for the view
+    if (mainContentRef.current && scrollPositions[view]) {
+      mainContentRef.current.scrollTop = scrollPositions[view];
+    }
   };
 
   const renderContent = () => {
@@ -388,6 +465,7 @@ function AppContent() {
                   console.error('Failed to refresh playlists:', error);
                 }
               }}
+              onShowPlaylistSelection={() => handlePlaylistSelectionForAlbum(selectedAlbum.songs)}
             />
           </div>
         );
@@ -410,6 +488,15 @@ function AppContent() {
               onPlaySong={handlePlaySong}
               currentSong={currentSong}
               isPlaying={isPlaying}
+              onPlaylistsChange={async () => {
+                try {
+                  const playlistsData = await getPlaylists();
+                  setPlaylists(playlistsData);
+                } catch (error) {
+                  console.error('Failed to refresh playlists:', error);
+                }
+              }}
+              onAlbumClick={handleAlbumClick}
             />
           </div>
         );
@@ -524,27 +611,29 @@ function AppContent() {
             </div>
           </div>
           
-          <LibraryNav currentView={currentView} onNavigate={setCurrentView} />
+          <LibraryNav currentView={currentView} onNavigate={handleNavigate} />
           
-          {currentView === 'home' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-4">Recently Added</h2>
-              <AlbumGrid albums={recentAlbums} onAlbumClick={handleAlbumClick} />
-            </div>
+          {currentView === 'nowPlaying' && (
+            <MyMusic onAlbumClick={handleAlbumClick} />
           )}
 
           {currentView === 'albums' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-4">Albums</h2>
-              <AlbumGrid albums={albums} onAlbumClick={handleAlbumClick} />
-            </div>
+            <AlbumsView albums={albums} onAlbumClick={handleAlbumClick} />
           )}
 
           {currentView === 'playlists' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-4">Playlists</h2>
-              <PlaylistGrid playlists={playlists} onPlaylistClick={handlePlaylistClick} />
-            </div>
+            <PlaylistsView 
+              playlists={playlists}
+              onPlaylistClick={isPlaylistSelectionMode ? handlePlaylistSelect : handlePlaylistClick}
+              onPlaylistsChange={async () => {
+                try {
+                  const playlistsData = await getPlaylists();
+                  setPlaylists(playlistsData);
+                } catch (error) {
+                  console.error('Failed to refresh playlists:', error);
+                }
+              }}
+            />
           )}
 
           {currentView === 'artists' && (
@@ -637,38 +726,7 @@ function AppContent() {
       );
     };
 
-    return (
-      <>
-        {mainContent()}
-        {currentView === 'nowPlaying' && (
-          <NowPlaying
-            currentSong={currentSong}
-            isPlaying={isPlaying}
-            progress={progress}
-            onTogglePlay={handleTogglePlay}
-            onNext={handleNextSong}
-            onPrevious={handlePreviousSong}
-            onSeek={handleSeek}
-            playlists={playlists}
-            onPlaylistsChange={async () => {
-              try {
-                const playlistsData = await getPlaylists();
-                setPlaylists(playlistsData);
-              } catch (error) {
-                console.error('Failed to refresh playlists:', error);
-              }
-            }}
-            isShuffleOn={isShuffleOn}
-            onToggleShuffle={handleToggleShuffle}
-            repeatMode={repeatMode}
-            onToggleRepeat={handleToggleRepeat}
-            upcomingSongs={getUpcomingSongs()}
-            onPlaySong={handlePlaySong}
-            onMinimize={() => setCurrentView(previousView)}
-          />
-        )}
-      </>
-    );
+    return mainContent();
   };
 
   useEffect(() => {
@@ -698,6 +756,19 @@ function AppContent() {
     }
   }, [isStandalone]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (playlistsDropdownRef.current && !playlistsDropdownRef.current.contains(event.target as Node)) {
+        setShowPlaylistsDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
     <div className={`flex flex-col h-screen bg-black text-white ${isStandalone ? 'standalone' : ''}`}>
       <main className="flex-1 overflow-y-auto pb-32 smooth-scroll" ref={mainContentRef}>
@@ -725,6 +796,9 @@ function AppContent() {
           repeatMode={repeatMode}
           onToggleRepeat={handleToggleRepeat}
           currentView={currentView}
+          duration={audioRef.current?.duration || 0}
+          currentTime={audioRef.current?.currentTime || 0}
+          onSeek={handleSeek}
         />
       )}
       
@@ -732,14 +806,7 @@ function AppContent() {
       
       <MobileNav
         currentView={currentView}
-        onNavigate={(view) => {
-          setCurrentView(view);
-          if (view === 'home') {
-            setSelectedAlbum(null);
-            setSelectedPlaylist(null);
-            setSelectedArtist(null);
-          }
-        }}
+        onNavigate={handleNavigate}
         currentSong={currentSong}
       />
     </div>
@@ -750,7 +817,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AppContent />
+        <Suspense fallback={<LoadingFallback />}>
+          <AppContent />
+        </Suspense>
       </AuthProvider>
     </QueryClientProvider>
   );

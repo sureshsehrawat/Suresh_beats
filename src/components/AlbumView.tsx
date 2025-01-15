@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MoreVertical, Plus, Play, Shuffle } from 'lucide-react';
+import { MoreVertical, Plus, Play, Shuffle, Music, Heart } from 'lucide-react';
 import ColorThief from 'colorthief';
 import type { Album, Song, Playlist } from '../lib/subsonic';
 import { getCoverArtUrl, createPlaylist, addToPlaylist, getPlaylists } from '../lib/subsonic';
+import { extractArtwork, type ArtworkResponse } from '../lib/metadata';
 import { Toast } from './Toast';
 
 interface AlbumViewProps {
@@ -13,6 +14,12 @@ interface AlbumViewProps {
   isPlaying: boolean;
   playlists: Playlist[];
   onPlaylistsChange: () => void;
+  onShowPlaylistSelection?: () => void;
+}
+
+interface SongArtwork {
+  id: string;
+  artwork: ArtworkResponse;
 }
 
 export const AlbumView: React.FC<AlbumViewProps> = ({
@@ -23,6 +30,7 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   isPlaying,
   playlists,
   onPlaylistsChange,
+  onShowPlaylistSelection,
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNewPlaylistInput, setShowNewPlaylistInput] = useState(false);
@@ -34,9 +42,41 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
   const [songNewPlaylistName, setSongNewPlaylistName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [dominantColor, setDominantColor] = useState<[number, number, number] | null>(null);
+  const [headerOpacity, setHeaderOpacity] = useState(1);
+  const [headerScale, setHeaderScale] = useState(1);
+  const [isHeaderSticky, setIsHeaderSticky] = useState(false);
+  const [songArtworks, setSongArtworks] = useState<SongArtwork[]>([]);
+  const [isLoadingArtwork, setIsLoadingArtwork] = useState(true);
+  
   const imgRef = useRef<HTMLImageElement>(null);
   const albumDropdownRef = useRef<HTMLDivElement>(null);
   const songDropdownsRef = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const headerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!containerRef.current || !headerRef.current) return;
+      
+      const scrollPosition = containerRef.current.scrollTop;
+      const headerHeight = headerRef.current.offsetHeight;
+      const triggerPoint = headerHeight * 0.4;
+      
+      // Calculate opacity and scale based on scroll position
+      const newOpacity = Math.max(0, 1 - (scrollPosition / triggerPoint));
+      const newScale = Math.max(0.6, 1 - (scrollPosition / triggerPoint) * 0.4);
+      
+      setHeaderOpacity(newOpacity);
+      setHeaderScale(newScale);
+      setIsHeaderSticky(scrollPosition > triggerPoint);
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -88,6 +128,35 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
 
     loadImage();
   }, [album.coverArt]);
+
+  useEffect(() => {
+    const loadSongArtworks = async () => {
+      setIsLoadingArtwork(true);
+      try {
+        const artworkPromises = songs.map(async (song) => {
+          const artwork = await extractArtwork(song.path, album.coverArt);
+          return { id: song.id, artwork };
+        });
+        
+        const artworks = await Promise.all(artworkPromises);
+        setSongArtworks(artworks);
+      } catch (error) {
+        console.error('Error loading song artworks:', error);
+      } finally {
+        setIsLoadingArtwork(false);
+      }
+    };
+
+    loadSongArtworks();
+  }, [songs, album.coverArt]);
+
+  const getSongArtwork = (songId: string): string | null => {
+    const songArtwork = songArtworks.find(art => art.id === songId);
+    if (songArtwork?.artwork.artwork) {
+      return songArtwork.artwork.artwork;
+    }
+    return album.coverArt ? getCoverArtUrl(album.coverArt) : null;
+  };
 
   const backgroundStyle = dominantColor ? {
     background: `
@@ -189,203 +258,266 @@ export const AlbumView: React.FC<AlbumViewProps> = ({
     }
   };
 
-  return (
-    <div className="relative min-h-screen -mt-4 -mx-4 px-4 pt-4 pb-24 bg-black">
-      <div className="absolute top-0 left-0 right-0 h-[500px] transition-all duration-1000" style={backgroundStyle} />
+  const handleAddToPlaylistClick = () => {
+    if (onShowPlaylistSelection) {
+      onShowPlaylistSelection();
+      setShowDropdown(false);
+    }
+  };
 
-      <div className="relative z-10">
-        <div className="flex flex-col items-center mb-8 relative">
-          <div className="absolute top-0 right-0" ref={albumDropdownRef}>
-            <button
-              onClick={handleDropdownClick}
-              className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
-            >
-              <MoreVertical className="w-6 h-6" />
-            </button>
-            
-            {showDropdown && (
-              <div className="absolute right-0 mt-2 w-56 bg-zinc-800 rounded-lg shadow-lg py-1 z-10">
-                <button
-                  onClick={() => setShowNewPlaylistInput(true)}
-                  className="w-full px-4 py-2 text-left hover:bg-zinc-700 flex items-center"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create New Playlist
-                </button>
-                
-                {playlists.map(playlist => (
+  return (
+    <div 
+      ref={containerRef}
+      className="relative h-screen overflow-y-auto -mt-4 -mx-4 bg-black"
+      style={{ scrollBehavior: 'smooth' }}
+    >
+      <div 
+        className={`sticky top-0 z-20 h-16 sticky-header ${isHeaderSticky ? 'opacity-100' : 'opacity-0'}`}
+        style={{ pointerEvents: isHeaderSticky ? 'auto' : 'none' }}
+      >
+        <div className="flex items-center h-full px-4">
+          {album.coverArt && (
+            <img
+              src={getCoverArtUrl(album.coverArt)}
+              alt={album.name}
+              className="w-10 h-10 rounded-md mr-3"
+            />
+          )}
+          <div className="flex-1">
+            <h1 className="text-lg font-bold truncate">{album.name}</h1>
+            <p className="text-sm text-zinc-400 truncate">{album.artist}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative">
+        <div 
+          className="absolute top-0 left-0 right-0 h-[500px] transition-all duration-1000" 
+          style={backgroundStyle} 
+        />
+
+        <div className="relative z-10 px-4 pt-4">
+          <div 
+            ref={headerRef}
+            className="flex flex-col items-center mb-8 relative album-header-transition"
+            style={{
+              transform: `scale(${headerScale})`,
+              opacity: headerOpacity,
+            }}
+          >
+            <div className="absolute top-0 right-0" ref={albumDropdownRef}>
+              <button
+                onClick={handleDropdownClick}
+                className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
+              >
+                <MoreVertical className="w-6 h-6" />
+              </button>
+              
+              {showDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-[#282828] rounded-md shadow-lg py-1 z-10">
                   <button
-                    key={playlist.id}
-                    onClick={() => handleAddToPlaylist(playlist.id)}
-                    className="w-full px-4 py-2 text-left hover:bg-zinc-700"
+                    onClick={handleAddToPlaylistClick}
+                    className="w-full px-4 py-2 text-left hover:bg-[#3E3E3E] transition-colors text-white/90 flex items-center"
                   >
-                    Add to {playlist.name}
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add to playlist
                   </button>
-                ))}
-              </div>
-            )}
-            
-            {showNewPlaylistInput && (
-              <div className="absolute right-0 mt-2 w-64 bg-zinc-800 rounded-lg shadow-lg p-4 z-10">
-                <input
-                  type="text"
-                  value={newPlaylistName}
-                  onChange={(e) => setNewPlaylistName(e.target.value)}
-                  placeholder="Playlist name"
-                  className="w-full px-3 py-2 bg-zinc-700 rounded-lg mb-2 text-white placeholder-zinc-400"
-                  autoFocus
-                />
-                <div className="flex justify-end space-x-2">
                   <button
-                    onClick={() => setShowNewPlaylistInput(false)}
-                    className="px-3 py-1 text-sm hover:bg-zinc-700 rounded"
+                    onClick={() => {/* TODO: Implement play next functionality */}}
+                    className="w-full px-4 py-2 text-left hover:bg-[#3E3E3E] transition-colors text-white/90 flex items-center"
                   >
-                    Cancel
+                    <Play className="w-4 h-4 mr-2" />
+                    Play next
                   </button>
                   <button
-                    onClick={handleCreatePlaylist}
-                    disabled={!newPlaylistName}
-                    className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 rounded disabled:opacity-50"
+                    onClick={() => {/* TODO: Implement favorite functionality */}}
+                    className="w-full px-4 py-2 text-left hover:bg-[#3E3E3E] transition-colors text-white/90 flex items-center"
                   >
-                    Create
+                    <Heart className="w-4 h-4 mr-2" />
+                    Favourite
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+              
+              {showNewPlaylistInput && (
+                <div className="absolute right-0 mt-2 w-64 bg-zinc-800 rounded-lg shadow-lg p-4 z-10">
+                  <input
+                    type="text"
+                    value={newPlaylistName}
+                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                    placeholder="Playlist name"
+                    className="w-full px-3 py-2 bg-zinc-700 rounded-lg mb-2 text-white placeholder-zinc-400"
+                    autoFocus
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => setShowNewPlaylistInput(false)}
+                      className="px-3 py-1 text-sm hover:bg-zinc-700 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreatePlaylist}
+                      disabled={!newPlaylistName}
+                      className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 rounded disabled:opacity-50"
+                    >
+                      Create
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
-          <div className="w-[14.4rem] h-[14.4rem] bg-zinc-800 rounded-lg overflow-hidden mb-4 relative">
-            {(songs[0]?.coverArt || album.coverArt) && (
+            {album.coverArt && (
               <img
                 ref={imgRef}
-                crossOrigin="anonymous"
-                src={getCoverArtUrl(songs[0]?.coverArt || album.coverArt)}
+                src={getCoverArtUrl(album.coverArt)}
                 alt={album.name}
-                className="w-full h-full object-cover"
+                className="w-64 h-64 rounded-lg shadow-lg mb-6 album-artwork"
+                crossOrigin="anonymous"
               />
             )}
-          </div>
-          <h1 className="text-2xl font-bold mb-1">{album.name}</h1>
-          <p className="text-zinc-400">{album.artist}</p>
-          
-          {error && (
-            <p className="text-red-500 text-sm mt-2">{error}</p>
-          )}
-        </div>
 
-        <div className="flex justify-center items-center space-x-4 mb-6">
-          <button
-            onClick={() => onPlaySong(songs[0])}
-            className="bg-zinc-900 hover:bg-zinc-800 text-red-500 px-8 py-3 rounded-lg font-bold transition-colors flex items-center space-x-2"
-          >
-            <Play className="w-5 h-5" strokeWidth={2.5} />
-            <span>Play</span>
-          </button>
-          <button
-            onClick={() => {
-              const shuffledSongs = [...songs].sort(() => Math.random() - 0.5);
-              onPlaySong(shuffledSongs[0]);
-            }}
-            className="bg-zinc-900 hover:bg-zinc-800 text-red-500 px-8 py-3 rounded-lg font-bold transition-colors flex items-center space-x-2"
-          >
-            <Shuffle className="w-5 h-5" strokeWidth={2.5} />
-            <span>Shuffle</span>
-          </button>
-        </div>
+            <h1 className="text-3xl font-bold mb-2">{album.name}</h1>
+            <p className="text-lg text-zinc-400 mb-6">{album.artist}</p>
 
-        <div className="space-y-2">
-          {songs.map((song) => {
-            const isCurrentSong = currentSong?.id === song.id;
-            return (
-              <div
-                key={song.id}
-                className="flex items-center space-x-4 rounded-lg hover:bg-zinc-800 group"
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => onPlaySong(songs[0])}
+                className="flex items-center px-6 py-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg transition-colors text-red-500"
               >
-                <button
+                <Play className="w-5 h-5 mr-2" />
+                Play
+              </button>
+              <button
+                onClick={() => {
+                  const randomIndex = Math.floor(Math.random() * songs.length);
+                  onPlaySong(songs[randomIndex]);
+                }}
+                className="flex items-center px-6 py-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg transition-colors text-red-500"
+              >
+                <Shuffle className="w-5 h-5 mr-2" />
+                Shuffle
+              </button>
+            </div>
+          </div>
+
+          <div className="px-4 py-2">
+            {songs.map((song, index) => {
+              const isCurrentSong = currentSong?.id === song.id;
+              const songArtwork = getSongArtwork(song.id);
+              
+              return (
+                <div
+                  key={song.id}
+                  className={`flex items-center p-2 rounded-lg hover:bg-white/10 transition-colors ${
+                    isCurrentSong ? 'bg-white/20' : ''
+                  }`}
                   onClick={() => onPlaySong(song)}
-                  className="flex-1 text-left px-4 py-3"
+                  style={{ cursor: 'pointer' }}
                 >
-                  <div className={`font-medium ${isCurrentSong ? 'text-red-500' : ''}`}>
-                    {song.title}
-                  </div>
-                  <div className="text-sm text-zinc-400">{song.artist}</div>
-                </button>
-
-                <div className="relative px-2" ref={(el) => songDropdownsRef.current[song.id] = el}>
-                  <button
-                    onClick={() => handleSongDropdownClick(song.id)}
-                    className="p-2 hover:bg-zinc-700 rounded-full transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    <MoreVertical className="w-5 h-5" />
-                  </button>
-
-                  {showSongDropdown === song.id && (
-                    <div className="absolute right-0 mt-2 w-56 bg-zinc-800 rounded-lg shadow-lg py-1 z-10">
-                      <button
-                        onClick={() => {
-                          setShowSongNewPlaylistInput(song.id);
-                          setShowSongDropdown(null);
-                        }}
-                        className="w-full px-4 py-2 text-left hover:bg-zinc-700 flex items-center"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create New Playlist
-                      </button>
-                      
-                      {playlists.map(playlist => (
-                        <button
-                          key={playlist.id}
-                          onClick={() => handleAddSongToPlaylist(song.id, playlist.id)}
-                          className="w-full px-4 py-2 text-left hover:bg-zinc-700"
-                        >
-                          Add to {playlist.name}
-                        </button>
-                      ))}
+                  <div className="flex items-center flex-1">
+                    <div className="relative w-10 h-10 mr-3 rounded-md overflow-hidden">
+                      {songArtwork ? (
+                        <img
+                          src={songArtwork}
+                          alt={song.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                          <Music className="w-5 h-5 text-zinc-400" />
+                        </div>
+                      )}
+                      {isLoadingArtwork && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        </div>
+                      )}
                     </div>
-                  )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{song.title}</div>
+                      <div className="text-sm text-zinc-400 truncate">{song.artist}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="relative px-2" ref={(el) => songDropdownsRef.current[song.id] = el}>
+                    <button
+                      onClick={() => handleSongDropdownClick(song.id)}
+                      className="p-2 hover:bg-zinc-700 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
 
-                  {showSongNewPlaylistInput === song.id && (
-                    <div className="absolute right-0 mt-2 w-64 bg-zinc-800 rounded-lg shadow-lg p-4 z-10">
-                      <input
-                        type="text"
-                        value={songNewPlaylistName}
-                        onChange={(e) => setSongNewPlaylistName(e.target.value)}
-                        placeholder="Playlist name"
-                        className="w-full px-3 py-2 bg-zinc-700 rounded-lg mb-2 text-white placeholder-zinc-400"
-                        autoFocus
-                      />
-                      <div className="flex justify-end space-x-2">
+                    {showSongDropdown === song.id && (
+                      <div className="absolute right-0 mt-2 w-56 bg-zinc-800 rounded-lg shadow-lg py-1 z-10">
                         <button
-                          onClick={() => setShowSongNewPlaylistInput(null)}
-                          className="px-3 py-1 text-sm hover:bg-zinc-700 rounded"
+                          onClick={() => {
+                            setShowSongNewPlaylistInput(song.id);
+                            setShowSongDropdown(null);
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-zinc-700 flex items-center"
                         >
-                          Cancel
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create New Playlist
                         </button>
-                        <button
-                          onClick={() => handleCreatePlaylistForSong(song.id)}
-                          disabled={!songNewPlaylistName}
-                          className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 rounded disabled:opacity-50"
-                        >
-                          Create
-                        </button>
+                        
+                        {playlists.map(playlist => (
+                          <button
+                            key={playlist.id}
+                            onClick={() => handleAddSongToPlaylist(song.id, playlist.id)}
+                            className="w-full px-4 py-2 text-left hover:bg-zinc-700"
+                          >
+                            Add to {playlist.name}
+                          </button>
+                        ))}
                       </div>
+                    )}
+
+                    {showSongNewPlaylistInput === song.id && (
+                      <div className="absolute right-0 mt-2 w-64 bg-zinc-800 rounded-lg shadow-lg p-4 z-10">
+                        <input
+                          type="text"
+                          value={songNewPlaylistName}
+                          onChange={(e) => setSongNewPlaylistName(e.target.value)}
+                          placeholder="Playlist name"
+                          className="w-full px-3 py-2 bg-zinc-700 rounded-lg mb-2 text-white placeholder-zinc-400"
+                          autoFocus
+                        />
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => setShowSongNewPlaylistInput(null)}
+                            className="px-3 py-1 text-sm hover:bg-zinc-700 rounded"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleCreatePlaylistForSong(song.id)}
+                            disabled={!songNewPlaylistName}
+                            className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 rounded disabled:opacity-50"
+                          >
+                            Create
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {isCurrentSong && (
+                    <div className="text-red-500 pr-4">
+                      {isPlaying ? '▶️' : '⏸'}
                     </div>
                   )}
                 </div>
+              );
+            })}
+          </div>
 
-                {isCurrentSong && (
-                  <div className="text-red-500 pr-4">
-                    {isPlaying ? '▶️' : '⏸'}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {toast && (
+            <Toast message={toast} onClose={() => setToast(null)} />
+          )}
         </div>
-
-        {toast && (
-          <Toast message={toast} onClose={() => setToast(null)} />
-        )}
       </div>
     </div>
   );

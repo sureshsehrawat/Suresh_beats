@@ -1,0 +1,48 @@
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  user-select: none;
+}
+
+.progress-bar-container {
+  flex: 1;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.progress-bar {
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.time-display {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 3rem;
+  text-align: center;
+}
+
+/* Hover effect */
+.progress-bar-container:hover .progress-bar {
+  height: 6px;
+}
+
+.progress-bar-container:hover .progress-bar-fill {
+  background-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+} 

@@ -1,13 +1,34 @@
-import { XMLParser } from 'fast-xml-parser';
+const BASE_URL = 'https://beats.jatcloud.com';
 
-const BASE_URL = 'https://demo.navidrome.org';
-const USER = 'demo';
-const PASS = 'demo';
+interface SubsonicIndex {
+  artist: SubsonicArtist | SubsonicArtist[];
+}
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '',
-});
+interface SubsonicArtist {
+  id: string;
+  name: string;
+}
+
+interface DirectoryChild {
+  id: string;
+  title?: string;
+  name?: string;
+  parent?: string;
+  starred?: string;
+  playCount?: number;
+  created?: string;
+  isDir?: boolean;
+  artist?: string;
+  duration?: number;
+  track?: number;
+  size?: number;
+  contentType?: string;
+}
+
+export interface User {
+  username: string;
+  isAdmin: boolean;
+}
 
 export interface Album {
   id: string;
@@ -73,11 +94,41 @@ export interface Directory {
   contentType?: string;
 }
 
+// Helper function to get credentials from localStorage
+const getCredentials = () => {
+  const user = localStorage.getItem('user');
+  if (!user) return null;
+  const { username } = JSON.parse(user);
+  const password = localStorage.getItem(`password_${username}`);
+  return { username, password };
+};
+
+// Helper function to build API URL with authentication
+const buildApiUrl = (endpoint: string, params: Record<string, string> = {}) => {
+  const credentials = getCredentials();
+  if (!credentials) throw new Error('Not authenticated');
+
+  const { username, password } = credentials;
+  const baseParams = {
+    u: username,
+    p: password,
+    v: '1.13.0',
+    c: 'spotify-clone',
+    f: 'json',
+    ...params
+  };
+
+  const queryString = Object.entries(baseParams)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+
+  return `${BASE_URL}/rest/${endpoint}?${queryString}`;
+};
+
 export const getAlbums = async (): Promise<Album[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getAlbumList2?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&type=alphabeticalByName&size=500&f=json`
-    );
+    const url = buildApiUrl('getAlbumList2', { type: 'alphabeticalByName', size: '500' });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -98,9 +149,8 @@ export const getAlbums = async (): Promise<Album[]> => {
 
 export const getAlbum = async (id: string): Promise<{ album: Album; songs: Song[] }> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getAlbum?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&id=${id}&f=json`
-    );
+    const url = buildApiUrl('getAlbum', { id });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -123,18 +173,23 @@ export const getAlbum = async (id: string): Promise<{ album: Album; songs: Song[
 };
 
 export const getCoverArtUrl = (id: string): string => {
-  return `${BASE_URL}/rest/getCoverArt?id=${id}&u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone`;
+  const credentials = getCredentials();
+  if (!credentials) throw new Error('Not authenticated');
+  const { username, password } = credentials;
+  return `${BASE_URL}/rest/getCoverArt?id=${id}&u=${username}&p=${password}&v=1.13.0&c=spotify-clone`;
 };
 
 export const getStreamUrl = (id: string): string => {
-  return `${BASE_URL}/rest/stream?id=${id}&u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone`;
+  const credentials = getCredentials();
+  if (!credentials) throw new Error('Not authenticated');
+  const { username, password } = credentials;
+  return `${BASE_URL}/rest/stream?id=${id}&u=${username}&p=${password}&v=1.13.0&c=spotify-clone`;
 };
 
 export const getPlaylists = async (): Promise<Playlist[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getPlaylists?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&f=json`
-    );
+    const url = buildApiUrl('getPlaylists');
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -155,9 +210,8 @@ export const getPlaylists = async (): Promise<Playlist[]> => {
 
 export const getPlaylist = async (id: string): Promise<{ playlist: Playlist; songs: Song[] }> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getPlaylist?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&id=${id}&f=json`
-    );
+    const url = buildApiUrl('getPlaylist', { id });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -181,9 +235,8 @@ export const getPlaylist = async (id: string): Promise<{ playlist: Playlist; son
 
 export const getArtists = async (): Promise<Artist[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getArtists?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&f=json`
-    );
+    const url = buildApiUrl('getArtists');
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -204,9 +257,8 @@ export const getArtists = async (): Promise<Artist[]> => {
 
 export const getArtist = async (id: string): Promise<{ artist: Artist; albums: Album[] }> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getArtist?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&id=${id}&f=json`
-    );
+    const url = buildApiUrl('getArtist', { id });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -230,9 +282,8 @@ export const getArtist = async (id: string): Promise<{ artist: Artist; albums: A
 
 export const getAllSongs = async (): Promise<Song[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getRandomSongs?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&size=500&f=json`
-    );
+    const url = buildApiUrl('getRandomSongs', { size: '500' });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -253,9 +304,8 @@ export const getAllSongs = async (): Promise<Song[]> => {
 
 export const getRecentSongs = async (): Promise<Song[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getAlbumList2?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&type=newest&size=10&f=json`
-    );
+    const url = buildApiUrl('getAlbumList2', { type: 'newest', size: '10' });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -294,9 +344,8 @@ export const getRecentSongs = async (): Promise<Song[]> => {
 export const createPlaylist = async (name: string): Promise<Playlist> => {
   try {
     // First create an empty playlist
-    const response = await fetch(
-      `${BASE_URL}/rest/createPlaylist?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&name=${encodeURIComponent(name)}&f=json`
-    );
+    const url = buildApiUrl('createPlaylist', { name: encodeURIComponent(name) });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -327,9 +376,8 @@ export const addToPlaylist = async (playlistId: string, songIds: string[]): Prom
   try {
     // Add each song one by one as required by the Subsonic API
     for (const songId of songIds) {
-      const response = await fetch(
-        `${BASE_URL}/rest/updatePlaylist?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&playlistId=${encodeURIComponent(playlistId)}&songIdToAdd=${encodeURIComponent(songId)}&f=json`
-      );
+      const url = buildApiUrl('updatePlaylist', { playlistId: encodeURIComponent(playlistId), songIdToAdd: encodeURIComponent(songId) });
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -349,9 +397,8 @@ export const addToPlaylist = async (playlistId: string, songIds: string[]): Prom
 
 export const getRecentAlbums = async (): Promise<Album[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getAlbumList2?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&type=recent&size=20&f=json`
-    );
+    const url = buildApiUrl('getAlbumList2', { type: 'recent', size: '20' });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -372,9 +419,8 @@ export const getRecentAlbums = async (): Promise<Album[]> => {
 
 export const search = async (query: string): Promise<SearchResults> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/search3?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&query=${encodeURIComponent(query)}&f=json`
-    );
+    const url = buildApiUrl('search3', { query: encodeURIComponent(query) });
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -400,9 +446,8 @@ export const search = async (query: string): Promise<SearchResults> => {
 
 export const getMusicFolders = async (): Promise<MusicFolder[]> => {
   try {
-    const response = await fetch(
-      `${BASE_URL}/rest/getMusicFolders?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&f=json`
-    );
+    const url = buildApiUrl('getMusicFolders');
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -425,9 +470,8 @@ export const getMusicDirectories = async (folderId?: string): Promise<Directory[
   try {
     // If no folderId is provided, get the root indexes
     if (!folderId) {
-      const response = await fetch(
-        `${BASE_URL}/rest/getIndexes?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&f=json`
-      );
+      const url = buildApiUrl('getIndexes');
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -443,10 +487,10 @@ export const getMusicDirectories = async (folderId?: string): Promise<Directory[
       const indexes = data['subsonic-response'].indexes?.index || [];
       const directories: Directory[] = [];
       
-      indexes.forEach((index: any) => {
+      indexes.forEach((index: SubsonicIndex) => {
         if (index.artist) {
           const artists = Array.isArray(index.artist) ? index.artist : [index.artist];
-          artists.forEach((artist: any) => {
+          artists.forEach((artist: SubsonicArtist) => {
             directories.push({
               id: artist.id,
               name: artist.name,
@@ -460,9 +504,8 @@ export const getMusicDirectories = async (folderId?: string): Promise<Directory[
     } 
     // If folderId is provided, get the specific directory contents
     else {
-      const response = await fetch(
-        `${BASE_URL}/rest/getMusicDirectory?u=${USER}&p=${PASS}&v=1.13.0&c=spotify-clone&id=${folderId}&f=json`
-      );
+      const url = buildApiUrl('getMusicDirectory', { id: folderId });
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -477,7 +520,7 @@ export const getMusicDirectories = async (folderId?: string): Promise<Directory[
       const directory = data['subsonic-response'].directory;
       const children = directory?.child || [];
 
-      return children.map((child: any) => ({
+      return children.map((child: DirectoryChild) => ({
         id: child.id,
         name: child.title || child.name,
         parent: child.parent,
@@ -495,5 +538,89 @@ export const getMusicDirectories = async (folderId?: string): Promise<Directory[
   } catch (error) {
     console.error('Subsonic API error:', error);
     throw new Error('Failed to fetch music directories');
+  }
+};
+
+export const starItem = async (id: string, type: 'song' | 'album' | 'artist' | 'playlist'): Promise<void> => {
+  try {
+    const url = buildApiUrl('star', { id });
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data['subsonic-response'].status !== 'ok') {
+      throw new Error(data['subsonic-response'].error?.message || 'Subsonic API error');
+    }
+  } catch (error) {
+    console.error('Subsonic API error:', error);
+    throw new Error(`Failed to star ${type}`);
+  }
+};
+
+export const unstarItem = async (id: string, type: 'song' | 'album' | 'artist' | 'playlist'): Promise<void> => {
+  try {
+    const url = buildApiUrl('unstar', { id });
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data['subsonic-response'].status !== 'ok') {
+      throw new Error(data['subsonic-response'].error?.message || 'Subsonic API error');
+    }
+  } catch (error) {
+    console.error('Subsonic API error:', error);
+    throw new Error(`Failed to unstar ${type}`);
+  }
+};
+
+export const getFrequentAlbums = async (): Promise<Album[]> => {
+  try {
+    const url = buildApiUrl('getAlbumList2', { type: 'frequent', size: '50' });
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data['subsonic-response'].status !== 'ok') {
+      throw new Error(data['subsonic-response'].error?.message || 'Subsonic API error');
+    }
+
+    return data['subsonic-response'].albumList2?.album || [];
+  } catch (error) {
+    console.error('Subsonic API error:', error);
+    throw new Error('Failed to fetch frequent albums from Subsonic server');
+  }
+};
+
+export const getRandomAlbums = async (): Promise<Album[]> => {
+  try {
+    const url = buildApiUrl('getAlbumList2', { type: 'random', size: '12' });
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data['subsonic-response'].status !== 'ok') {
+      throw new Error(data['subsonic-response'].error?.message || 'Subsonic API error');
+    }
+
+    return data['subsonic-response'].albumList2?.album || [];
+  } catch (error) {
+    console.error('Subsonic API error:', error);
+    throw new Error('Failed to fetch random albums from Subsonic server');
   }
 };

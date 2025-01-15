@@ -1,18 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 
 interface User {
   username: string;
   isAdmin: boolean;
-  profilePhoto: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  createUser: (username: string, password: string) => Promise<boolean>;
-  updateProfilePhoto: (photoUrl: string) => Promise<boolean>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,32 +20,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    // Initialize the users table if it doesn't exist
-    const initializeDb = async () => {
-      const { data: existingUsers } = await supabase
-        .from('users')
-        .select('username')
-        .eq('username', 'suresh');
-
-      if (!existingUsers?.length) {
-        // Add the default admin user
-        await supabase
-          .from('users')
-          .insert([
-            {
-              username: 'suresh',
-              password: 'chickchick',
-              is_admin: true,
-              profile_photo: null
-            }
-          ]);
-      }
-    };
-
-    initializeDb();
-  }, []);
-
-  useEffect(() => {
     if (user) {
       localStorage.setItem('user', JSON.stringify(user));
     } else {
@@ -58,75 +28,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .eq('password', password)
-      .single();
+    try {
+      // Call the Airsonic ping API first to verify credentials
+      const pingResponse = await fetch(
+        `https://beats.jatcloud.com/rest/ping?u=${encodeURIComponent(username)}&p=${encodeURIComponent(password)}&v=1.13.0&c=spotify-clone&f=json`
+      );
 
-    if (error || !users) {
+      if (!pingResponse.ok) {
+        console.error('Ping failed:', pingResponse.status);
+        return false;
+      }
+
+      const pingData = await pingResponse.json();
+      if (pingData['subsonic-response'].status !== 'ok') {
+        console.error('Ping response not ok:', pingData['subsonic-response']);
+        return false;
+      }
+
+      // If ping successful, get user details
+      const userResponse = await fetch(
+        `https://beats.jatcloud.com/rest/getUser?u=${encodeURIComponent(username)}&p=${encodeURIComponent(password)}&v=1.13.0&c=spotify-clone&f=json&username=${encodeURIComponent(username)}`
+      );
+
+      if (!userResponse.ok) {
+        console.error('User fetch failed:', userResponse.status);
+        return false;
+      }
+
+      const userData = await userResponse.json();
+      if (userData['subsonic-response'].status !== 'ok') {
+        console.error('User response not ok:', userData['subsonic-response']);
+        return false;
+      }
+
+      const user = userData['subsonic-response'].user;
+      setUser({ 
+        username: user.username,
+        isAdmin: user.adminRole
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Login error:', error);
       return false;
     }
-
-    setUser({ 
-      username: users.username, 
-      isAdmin: users.is_admin,
-      profilePhoto: users.profile_photo 
-    });
-    return true;
   };
 
   const logout = () => {
     setUser(null);
-  };
-
-  const createUser = async (username: string, password: string): Promise<boolean> => {
-    if (!user?.isAdmin) return false;
-
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('username')
-      .eq('username', username)
-      .single();
-
-    if (existingUser) {
-      return false;
+    // Clear stored password
+    if (user) {
+      localStorage.removeItem(`password_${user.username}`);
     }
-
-    // Create new user
-    const { error } = await supabase
-      .from('users')
-      .insert([
-        {
-          username,
-          password,
-          is_admin: false,
-          profile_photo: null
-        }
-      ]);
-
-    return !error;
-  };
-
-  const updateProfilePhoto = async (photoUrl: string): Promise<boolean> => {
-    if (!user) return false;
-
-    const { error } = await supabase
-      .from('users')
-      .update({ profile_photo: photoUrl })
-      .eq('username', user.username);
-
-    if (!error) {
-      setUser({ ...user, profilePhoto: photoUrl });
-      return true;
-    }
-    return false;
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, createUser, updateProfilePhoto }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -21,7 +21,14 @@ export function Login() {
 
     try {
       const success = await login(username, password);
-      if (!success) {
+      if (success) {
+        // Store password for API calls
+        localStorage.setItem(`password_${username}`, password);
+        // Add a small delay before reloading to ensure localStorage is updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      } else {
         setError('Invalid username or password');
       }
     } catch (err) {
@@ -50,6 +57,9 @@ export function Login() {
               className="w-full px-4 py-3 bg-zinc-800 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="Enter your username"
               disabled={loading}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
             />
           </div>
 

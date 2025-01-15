@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, Library, Settings, Folder } from 'lucide-react';
+import { Home, Search, Music2, Settings, Folder } from 'lucide-react';
 import type { Song } from '../lib/subsonic';
 
 interface MobileNavProps {
@@ -10,10 +10,10 @@ interface MobileNavProps {
 
 export function MobileNav({ currentView, onNavigate, currentSong }: MobileNavProps) {
   const navItems = [
-    { view: 'home', icon: Home, label: 'Home' },
+    { view: 'nowPlaying', icon: Home, label: 'My Music' },
     { view: 'search', icon: Search, label: 'Search' },
     { view: 'folders', icon: Folder, label: 'Folders' },
-    { view: 'nowPlaying', icon: Library, label: 'Now Playing' },
+    { view: 'playlists', icon: Music2, label: 'Playlists' },
     { view: 'settings', icon: Settings, label: 'Settings' },
   ];
 

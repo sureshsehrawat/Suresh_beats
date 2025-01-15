@@ -3,27 +3,21 @@ import { Music } from 'lucide-react';
 import type { Album } from '../lib/subsonic';
 import { getCoverArtUrl } from '../lib/subsonic';
 
-interface AlbumGridProps {
+interface AlbumListProps {
   albums: Album[];
   onAlbumClick: (album: Album) => void;
-  gridColumns: number;
 }
 
-export function AlbumGrid({ albums, onAlbumClick, gridColumns }: AlbumGridProps) {
+export const AlbumList: React.FC<AlbumListProps> = ({ albums, onAlbumClick }) => {
   return (
-    <div 
-      className="grid gap-4 p-4"
-      style={{
-        gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
-      }}
-    >
+    <div className="space-y-2">
       {albums.map((album) => (
         <div
           key={album.id}
-          className="cursor-pointer hover:opacity-80 transition-opacity border border-white/20 rounded-md overflow-hidden"
+          className="flex items-center space-x-4 p-3 rounded-lg hover:bg-zinc-800 cursor-pointer transition-colors"
           onClick={() => onAlbumClick(album)}
         >
-          <div className="aspect-square relative">
+          <div className="w-12 h-12 bg-zinc-800 rounded overflow-hidden flex-shrink-0">
             {album.coverArt ? (
               <img
                 src={getCoverArtUrl(album.coverArt)}
@@ -33,16 +27,19 @@ export function AlbumGrid({ albums, onAlbumClick, gridColumns }: AlbumGridProps)
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Music className="w-12 h-12 text-zinc-500" />
+                <Music className="w-6 h-6 text-zinc-500" />
               </div>
             )}
           </div>
-          <div className="bg-zinc-800 py-2">
-            <h3 className="font-semibold text-sm text-white truncate text-center">{album.name}</h3>
-            <p className="text-xs text-zinc-400 truncate text-center">{album.artist}</p>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-sm truncate">{album.name}</h3>
+            <p className="text-xs text-zinc-400 truncate">{album.artist}</p>
+          </div>
+          <div className="text-xs text-zinc-400">
+            {album.songCount} songs
           </div>
         </div>
       ))}
     </div>
   );
-}
+}; 
